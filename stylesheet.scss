@@ -1,0 +1,28 @@
+.find-window-by-name {
+  padding: 2em;
+  background-color: rgba(10, 10, 10, 0.9);
+  border-radius: 5px;
+  border: 1px solid #7cf;
+  box-shadow: 2px 4px 15px 5px #000;
+
+  .search-entry {
+    margin-bottom: 2em;
+  }
+
+  .window-list {
+    .window-icon {
+      margin-right: 0.5em;
+    }
+    .window-title {
+      max-width: 40em;
+      text-overflow: ellipsis;
+    }
+    .window-row {
+      padding: 0.25em 1em;
+      border-radius: 5px;
+      &.selected {
+        background-color: rgba(80, 120, 190, 0.5);
+      }
+    }
+  }
+}

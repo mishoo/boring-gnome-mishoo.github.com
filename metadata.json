@@ -1,0 +1,7 @@
+{
+    "name": "gnome@mishoo.github.com",
+    "description": "Provides cycle-workspaces and find-window-by-name",
+    "uuid": "gnome@mishoo.github.com",
+    "shell-version": ["3.28.2"],
+    "settings-schema": "org.gnome.shell.extensions.github.mishoo"
+}
