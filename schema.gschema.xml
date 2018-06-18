@@ -1,5 +1,5 @@
 <schemalist>
-  <schema id="org.gnome.shell.extensions.github.mishoo" path="/org/gnome/shell/extensions/github/mishoo/">
+  <schema id="org.gnome.shell.extensions.mishoo.boring-gnome" path="/org/gnome/shell/extensions/mishoo/boring-gnome/">
     <key type="as" name="cycle-workspaces">
       <default><![CDATA[['<Super>Tab','<Ctrl><Alt>Tab']]]></default>
       <summary>Cycle between the last two workspaces</summary>
@@ -9,7 +9,7 @@
       <summary>Cycle between the last two workspaces taking current window</summary>
     </key>
     <key type="as" name="find-window-by-name">
-      <default><![CDATA[['<Ctrl><Super>r']]]></default>
+      <default><![CDATA[['<Ctrl><Super>r', '<Ctrl><Super>z']]]></default>
       <summary>Display a list of all windows (all workspaces) allowing you
       to quickly seacrh through it.</summary>
     </key>

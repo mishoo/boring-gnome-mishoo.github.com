@@ -26,3 +26,34 @@
     }
   }
 }
+
+.taskbar {
+  .window-row {
+    padding: 2px 5px;
+    .window-icon {
+      margin-right: 5px;
+      opacity: 0.75;
+    }
+    .window-title {
+      max-width: 9em;
+      text-overflow: ellipsis;
+      color: #aaa;
+    }
+    &:hover {
+      background: #333;
+    }
+    &.minimized {
+      .window-title {
+        color: #777;
+      }
+    }
+    &.active {
+      .window-title {
+        color: #fff;
+      }
+      .window-icon {
+        opacity: 1;
+      }
+    }
+  }
+}

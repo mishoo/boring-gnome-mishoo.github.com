@@ -11,6 +11,8 @@ const WorkspaceSwitcherPopup = imports.ui.workspaceSwitcherPopup.WorkspaceSwitch
 const Shell = imports.gi.Shell;
 const GLib = imports.gi.GLib;
 
+const ICON_SIZE = 24;
+
 function setTimeout(func, millis) {
     return GLib.timeout_add(GLib.PRIORITY_DEFAULT, millis, function() {
         func();
@@ -38,8 +40,6 @@ function addKeybinding(name, handler) {
                           handler);
 }
 
-const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
-
 let HANDLERS = {};
 let PREVIOUS;
 let WORKSPACE_DISPLAY_FUNC = null;
@@ -51,22 +51,10 @@ function enable() {
     HANDLERS.switch = global.window_manager.connect('switch-workspace', on_switch_workspace.bind(WM));
     WORKSPACE_DISPLAY_FUNC = WorkspaceSwitcherPopup.prototype.display;
     WorkspaceSwitcherPopup.prototype.display = function(){}; // kill the popup
-    addKeybinding("cycle-workspaces", function(display, screen){
-        if (PREVIOUS != null) {
-            let ws = screen.get_workspace_by_index(PREVIOUS);
-            Main.wm.actionMoveWorkspace(ws);
-        }
-    });
-    addKeybinding("cycle-workspaces-take-window", function(display, screen) {
-        if (PREVIOUS != null) {
-            let activeWindow = global.display.focus_window;
-            if (activeWindow) {
-                let ws = screen.get_workspace_by_index(PREVIOUS);
-                Main.wm.actionMoveWindow(activeWindow, ws);
-            }
-        }
-    });
-    addKeybinding("find-window-by-name", findWindowByName);
+    addKeybinding("cycle-workspaces", cycle_workspaces);
+    addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
+    addKeybinding("find-window-by-name", find_window_by_name);
+    TaskBar.init();
 }
 
 function disable() {
@@ -75,6 +63,7 @@ function disable() {
     Main.wm.removeKeybinding("cycle-workspaces");
     Main.wm.removeKeybinding("cycle-workspaces-take-window");
     Main.wm.removeKeybinding("find-window-by-name");
+    TaskBar.destroy();
 }
 
 /* -----[ the meat follows ]----- */
@@ -83,11 +72,25 @@ function CTRL(ev) {
     return ev.get_state() & Clutter.ModifierType.CONTROL_MASK;
 }
 
-function findWindowByName() {
-    let layout = new St.BoxLayout({
-        style_class: "find-window-by-name",
-        accessible_role: Atk.Role.DIALOG
-    });
+function cycle_workspaces(display, screen){
+    if (PREVIOUS != null) {
+        let ws = screen.get_workspace_by_index(PREVIOUS);
+        Main.wm.actionMoveWorkspace(ws);
+    }
+}
+
+function cycle_workspaces_take_window(display, screen) {
+    if (PREVIOUS != null) {
+        let activeWindow = display.focus_window;
+        if (activeWindow) {
+            let ws = screen.get_workspace_by_index(PREVIOUS);
+            Main.wm.actionMoveWindow(activeWindow, ws);
+        }
+    }
+}
+
+function find_window_by_name() {
+    let layout = new St.BoxLayout({ style_class: "find-window-by-name" });
     layout.set_vertical(true);
 
     let windows_box = new St.BoxLayout({ style_class: "window-list" });
@@ -106,30 +109,15 @@ function findWindowByName() {
     window_actors.push(window_actors.shift());
 
     let entries = window_actors.map((window, idx) => {
-        let title = window.get_title();
-        let klass = window.get_wm_class();
-        let label = new St.Label({ text: title, style_class: "window-title" });
-        let icon = new St.Bin({ style_class: "window-icon" });
-
-        let app = Shell.WindowTracker.get_default().get_window_app(window);
-        if (app) {
-            icon.set_child(app.create_icon_texture(24));
-        } else {
-            icon.set_child(new St.Icon({ icon_name: 'icon-missing', icon_size: 24 }));
-        }
-
-        let box = new St.BoxLayout({ style_class: "window-row" });
-        box.add(icon, BOX_VCENTER);
-        box.add(label, BOX_VCENTER);
-
-        return {
-            window  : window,
-            title   : title,
-            class   : klass,
-            box     : box,
+        let btn = TaskBar.make_win_button(window);
+        btn.box.connect("button-press-event", function() {
+            Main.activateWindow(window);
+        });
+        return Object.assign(btn, {
+            class   : window.get_wm_class(),
             index   : idx,
             visible : true
-        };
+        });
     });
     refresh(true);
 
@@ -156,7 +144,8 @@ function findWindowByName() {
             if (selected != null) {
                 Main.activateWindow(entries[selected].window);
             }
-            close();
+            // no need to close, it'll be dismissed by the focus-out
+            // handler. //  close();
             return Clutter.EVENT_STOP;
         }
         if (symbol == Clutter.KEY_Up || (CTRL(ev) && char == "p")) {
@@ -291,3 +280,180 @@ function on_switch_workspace(shellwm, from, to, direction) {
     this._switchWorkspaceDone(shellwm); // kill animation, dammit
     PREVIOUS = from;                    // last used workspace
 }
+
+/* -----[ task bar ]----- */
+
+let TaskBar = function(){
+
+    const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
+    let container;
+    let disconnect_handlers = [];
+    let cache = {
+        button: new Map(),
+        workspace: new Map()
+    };
+
+    function connect(obj, event, handler, disconnect = disconnect_handlers) {
+        let id = obj.connect(event, handler);
+        disconnect.push(function(){
+            obj.disconnect(id);
+        });
+    }
+
+    function init() {
+        container = new St.BoxLayout({ style_class: "taskbar" });
+        container.add(new St.Label({ text: "Buh" }), BOX_VCENTER);
+        Main.panel._leftBox.insert_child_at_index(container, 1);
+        connect(global.window_manager, "switch-workspace", on_switch_workspace);
+        connect(global.screen, "notify::n-workspaces", on_workspaces_changed);
+        connect(global.display, "notify::focus-window", on_focus_window);
+        refresh();
+        on_workspaces_changed();
+    }
+
+    function destroy() {
+        disconnect_handlers.forEach(f => f());
+        container.destroy();
+    }
+
+    function on_switch_workspace() {
+        refresh();
+    }
+
+    // this mostly copied from window-list (official extension).
+    function on_workspaces_changed() {
+        let n = global.screen.n_workspaces;
+        for (let i = 0; i < n; ++i) {
+            let workspace = global.screen.get_workspace_by_index(i);
+            if (!cache.workspace.has(workspace)) {
+                let handlers = [];
+                connect(workspace, "window-added", on_window_added, handlers);
+                connect(workspace, "window-removed", on_window_removed, handlers);
+            }
+        }
+    }
+
+    function on_window_added(workspace, window) {
+        refresh();              // let's take the easy route
+    }
+
+    function on_window_removed(workspace, window) {
+        refresh();
+    }
+
+    function add_class(widget, cls) {
+        widget.add_style_class_name(cls);
+    }
+
+    function remove_class(widget, cls) {
+        widget.remove_style_class_name(cls);
+    }
+
+    function cond_class(widget, condition, clsTrue, clsFalse) {
+        if (condition) {
+            add_class(widget, clsTrue);
+            if (clsFalse) remove_class(widget, clsFalse);
+        } else {
+            remove_class(widget, clsTrue);
+            if (clsFalse) add_class(widget, clsFalse);
+        }
+    }
+
+    function refresh() {
+        container.remove_all_children();
+        let workspace = global.screen.get_active_workspace();
+        let windows = global.display.get_tab_list(Meta.TabList.NORMAL, workspace);
+        windows.forEach(window => {
+            let x = cached_win_button(window);
+            container.add(x.box);
+        });
+    }
+
+    function on_focus_window() {
+        for (let [window, btn] of cache.button) {
+            cond_class(btn.box, is_active_window(window), "active");
+            cond_class(btn.box, window.minimized, "minimized");
+        }
+    }
+
+    function cached_win_button(window) {
+        let bag = cache.button;
+        let btn = bag.get(window);
+        if (!btn) {
+            btn = make_win_button(window);
+            bag.set(window, btn);
+            cond_class(btn.box, is_active_window(window), "active");
+
+            // setup new window button
+            btn.box.connect("button-press-event", function(){
+                toggle_window(window);
+            });
+            window.connect("unmanaged", function(){
+                bag.delete(window);
+                btn.box.destroy();
+            });
+            window.connect("notify::title", btn.update_title);
+            window.connect("notify::wm-class", btn.update_icon);
+            window.connect("notify::gtk-application-id", btn.update_icon);
+        }
+        return btn;
+    }
+
+    function make_win_button(window) {
+        let title = window.get_title();
+        let label = new St.Label({ text: title, style_class: "window-title" });
+        let icon = new St.Bin({ style_class: "window-icon" });
+
+        // let btn = new St.Button({ style_class: "window-button",
+        //                           can_focus: true,
+        //                           x_fill: true, y_fill: true,
+        //                           button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
+
+        let box = new St.BoxLayout({ style_class: "window-row", reactive: true, can_focus: true });
+        box.add(icon, BOX_VCENTER);
+        box.add(label, BOX_VCENTER);
+        let entry = {
+            window        : window,
+            title         : title,
+            box           : box,
+            update_title  : update_title,
+            update_icon   : update_icon
+        };
+
+        update_icon();
+        return entry;
+
+        function update_title() {
+            label.set_text(entry.title = window.get_title());
+        }
+
+        function update_icon() {
+            let app = Shell.WindowTracker.get_default().get_window_app(window);
+            if (app) {
+                icon.set_child(app.create_icon_texture(ICON_SIZE));
+            } else {
+                icon.set_child(new St.Icon({ icon_name: "icon-missing", icon_size: ICON_SIZE }));
+            }
+        }
+    }
+
+    function is_active_window(window) {
+        let fw = global.display.focus_window;
+        return fw == window || (fw && fw.get_transient_for() == window);
+    }
+
+    function toggle_window(window) {
+        if (is_active_window(window)) {
+            window.minimize();
+        } else {
+            Main.activateWindow(window);
+        }
+    }
+
+    return {
+        init            : init,
+        destroy         : destroy,
+        make_win_button : make_win_button
+    };
+
+}();

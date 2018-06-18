@@ -16,3 +16,21 @@
     border-radius: 5px; }
     .find-window-by-name .window-list .window-row.selected {
       background-color: rgba(80, 120, 190, 0.5); }
+
+.taskbar .window-row {
+  padding: 2px 5px; }
+  .taskbar .window-row .window-icon {
+    margin-right: 5px;
+    opacity: 0.75; }
+  .taskbar .window-row .window-title {
+    max-width: 9em;
+    text-overflow: ellipsis;
+    color: #aaa; }
+  .taskbar .window-row:hover {
+    background: #333; }
+  .taskbar .window-row.minimized .window-title {
+    color: #777; }
+  .taskbar .window-row.active .window-title {
+    color: #fff; }
+  .taskbar .window-row.active .window-icon {
+    opacity: 1; }
