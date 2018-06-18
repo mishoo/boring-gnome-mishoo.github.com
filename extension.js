@@ -55,6 +55,7 @@ function enable() {
     addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
     addKeybinding("find-window-by-name", find_window_by_name);
     TaskBar.init();
+    Main.panel.statusArea.activities.container.hide();
 }
 
 function disable() {
@@ -64,6 +65,7 @@ function disable() {
     Main.wm.removeKeybinding("cycle-workspaces-take-window");
     Main.wm.removeKeybinding("find-window-by-name");
     TaskBar.destroy();
+    Main.panel.statusArea.activities.container.show();
 }
 
 /* -----[ the meat follows ]----- */
