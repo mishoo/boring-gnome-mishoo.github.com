@@ -304,7 +304,6 @@ let TaskBar = function(){
 
     function init() {
         container = new St.BoxLayout({ style_class: "taskbar" });
-        container.add(new St.Label({ text: "Buh" }), BOX_VCENTER);
         Main.panel._leftBox.insert_child_at_index(container, 1);
         connect(global.window_manager, "switch-workspace", on_switch_workspace);
         connect(global.screen, "notify::n-workspaces", on_workspaces_changed);
