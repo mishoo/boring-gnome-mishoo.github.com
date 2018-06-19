@@ -24,6 +24,25 @@ function clearTimeout(id) {
     GLib.Source.remove(id);
 }
 
+function add_class(widget, cls) {
+    widget.add_style_class_name(cls);
+}
+
+function remove_class(widget, cls) {
+    widget.remove_style_class_name(cls);
+}
+
+function cond_class(widget, condition, clsTrue, clsFalse) {
+    if (condition) {
+        add_class(widget, clsTrue);
+        if (clsFalse) remove_class(widget, clsFalse);
+    } else {
+        remove_class(widget, clsTrue);
+        if (clsFalse) add_class(widget, clsFalse);
+    }
+    return condition;
+}
+
 const SchemaSource = Gio.SettingsSchemaSource.new_from_directory(
     Me.dir.get_path(), Gio.SettingsSchemaSource.get_default(), false);
 
@@ -92,7 +111,10 @@ function cycle_workspaces_take_window(display, screen) {
 }
 
 function find_window_by_name() {
-    let layout = new St.BoxLayout({ style_class: "find-window-by-name" });
+    let layout = new St.BoxLayout({
+        style_class: "find-window-by-name",
+        accessible_role: Atk.Role.DIALOG
+    });
     layout.set_vertical(true);
 
     let windows_box = new St.BoxLayout({ style_class: "window-list" });
@@ -111,11 +133,11 @@ function find_window_by_name() {
     window_actors.push(window_actors.shift());
 
     let entries = window_actors.map((window, idx) => {
-        let btn = TaskBar.make_win_button(window);
-        btn.box.connect("button-press-event", function() {
-            Main.activateWindow(window);
-        });
-        return Object.assign(btn, {
+        let entry = TaskBar.make_win_button(window);
+        // entry.btn.connect("button-press-event", function(){
+        //     close();
+        // });
+        return Object.assign(entry, {
             class   : window.get_wm_class(),
             index   : idx,
             visible : true
@@ -190,12 +212,9 @@ function find_window_by_name() {
             entries.forEach((entry, index) => {
                 entry.index = index;
                 if (entry.visible) {
-                    windows_box.add_child(entry.box);
-                    if (index === selected) {
+                    windows_box.add_child(entry.actor);
+                    if (cond_class(entry.actor, index === selected, "selected")) {
                         has_selected = true;
-                        entry.box.add_style_class_name("selected");
-                    } else {
-                        entry.box.remove_style_class_name("selected");
                     }
                 }
             });
@@ -207,12 +226,8 @@ function find_window_by_name() {
                 }
             }
         } else {
-            entries.forEach(({ box, visible, index }) => {
-                if (index === selected) {
-                    box.add_style_class_name("selected");
-                } else {
-                    box.remove_style_class_name("selected");
-                }
+            entries.forEach(({ actor, visible, index }) => {
+                cond_class(actor, index === selected, "selected");
             });
         }
     }
@@ -348,62 +363,52 @@ let TaskBar = function(){
         refresh();
     }
 
-    function add_class(widget, cls) {
-        widget.add_style_class_name(cls);
-    }
-
-    function remove_class(widget, cls) {
-        widget.remove_style_class_name(cls);
-    }
-
-    function cond_class(widget, condition, clsTrue, clsFalse) {
-        if (condition) {
-            add_class(widget, clsTrue);
-            if (clsFalse) remove_class(widget, clsFalse);
-        } else {
-            remove_class(widget, clsTrue);
-            if (clsFalse) add_class(widget, clsFalse);
-        }
-    }
-
     function refresh() {
         container.remove_all_children();
         let workspace = global.screen.get_active_workspace();
         let windows = global.display.get_tab_list(Meta.TabList.NORMAL, workspace);
         windows.forEach(window => {
             let x = cached_win_button(window);
-            container.add(x.box);
+            container.add(x.actor);
         });
     }
 
     function on_focus_window() {
         for (let [window, btn] of cache.button) {
-            cond_class(btn.box, is_active_window(window), "active");
-            cond_class(btn.box, window.minimized, "minimized");
+            cond_class(btn.actor, is_active_window(window), "active");
+            cond_class(btn.actor, window.minimized, "minimized");
         }
     }
 
     function cached_win_button(window) {
         let bag = cache.button;
-        let btn = bag.get(window);
-        if (!btn) {
-            btn = make_win_button(window);
-            bag.set(window, btn);
-            cond_class(btn.box, is_active_window(window), "active");
+        let entry = bag.get(window);
+        if (!entry) {
+            entry = make_win_button(window);
+            bag.set(window, entry);
+            cond_class(entry.actor, is_active_window(window), "active");
 
             // setup new window button
-            btn.box.connect("button-press-event", function(){
-                toggle_window(window);
+            entry.btn.connect("clicked", function(_, button){
+                if (button == 1) {
+                    toggle_window(window);
+                } else {
+                    let menuType = Meta.WindowMenuType.WM;
+                    let [ x, y ] = entry.btn.get_transformed_position();
+                    let [ width, height ] = entry.btn.get_size();
+                    let rect = { x, y, width, height };
+                    Main.wm._windowMenuManager.showWindowMenuForWindow(window, menuType, rect);
+                }
             });
             window.connect("unmanaged", function(){
                 bag.delete(window);
-                btn.box.destroy();
+                entry.actor.destroy();
             });
-            window.connect("notify::title", btn.update_title);
-            window.connect("notify::wm-class", btn.update_icon);
-            window.connect("notify::gtk-application-id", btn.update_icon);
+            window.connect("notify::title", entry.update_title);
+            window.connect("notify::wm-class", entry.update_icon);
+            window.connect("notify::gtk-application-id", entry.update_icon);
         }
-        return btn;
+        return entry;
     }
 
     function make_win_button(window) {
@@ -411,15 +416,19 @@ let TaskBar = function(){
         let label = new St.Label({ text: title, style_class: "window-title" });
         let icon = new St.Bin({ style_class: "window-icon" });
 
-        // let btn = new St.Button({ style_class: "window-button",
-        //                           can_focus: true,
-        //                           x_fill: true, y_fill: true,
-        //                           button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
+        let btn = new St.Button({ style_class: "window-button",
+                                  //can_focus: true,
+                                  x_fill: true, y_fill: true,
+                                  button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
 
         let box = new St.BoxLayout({ style_class: "window-row", reactive: true, can_focus: true });
         box.add(icon, BOX_VCENTER);
         box.add(label, BOX_VCENTER);
+        btn.set_child(box);
+
         let entry = {
+            actor         : btn,
+            btn           : btn,
             window        : window,
             title         : title,
             box           : box,

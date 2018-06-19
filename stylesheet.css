@@ -11,26 +11,26 @@
   .find-window-by-name .window-list .window-title {
     max-width: 40em;
     text-overflow: ellipsis; }
-  .find-window-by-name .window-list .window-row {
+  .find-window-by-name .window-list .window-button {
     padding: 0.25em 1em;
     border-radius: 5px; }
-    .find-window-by-name .window-list .window-row.selected {
+    .find-window-by-name .window-list .window-button.selected {
       background-color: rgba(80, 120, 190, 0.5); }
 
-.taskbar .window-row {
+.taskbar .window-button {
   padding: 2px 5px; }
-  .taskbar .window-row .window-icon {
+  .taskbar .window-button .window-icon {
     margin-right: 5px;
     opacity: 0.75; }
-  .taskbar .window-row .window-title {
+  .taskbar .window-button .window-title {
     max-width: 9em;
     text-overflow: ellipsis;
     color: #aaa; }
-  .taskbar .window-row:hover {
-    background: #333; }
-  .taskbar .window-row.minimized .window-title {
+  .taskbar .window-button:hover {
+    background: #222; }
+  .taskbar .window-button.minimized .window-title {
     color: #777; }
-  .taskbar .window-row.active .window-title {
+  .taskbar .window-button.active .window-title {
     color: #fff; }
-  .taskbar .window-row.active .window-icon {
+  .taskbar .window-button.active .window-icon {
     opacity: 1; }
