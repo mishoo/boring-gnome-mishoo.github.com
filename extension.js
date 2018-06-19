@@ -289,11 +289,8 @@ let TaskBar = function(){
 
     const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
     let container;
-    let disconnect_handlers = [];
-    let cache = {
-        button: new Map(),
-        workspace: new Map()
-    };
+    let disconnect_handlers;
+    let cache;
 
     function connect(obj, event, handler, disconnect = disconnect_handlers) {
         let id = obj.connect(event, handler);
@@ -303,6 +300,12 @@ let TaskBar = function(){
     }
 
     function init() {
+        disconnect_handlers = [];
+        cache = {
+            button: new Map(),
+            workspace: new Map()
+        };
+
         container = new St.BoxLayout({ style_class: "taskbar" });
         Main.panel._leftBox.insert_child_at_index(container, 1);
         connect(global.window_manager, "switch-workspace", on_switch_workspace);
@@ -314,6 +317,8 @@ let TaskBar = function(){
 
     function destroy() {
         disconnect_handlers.forEach(f => f());
+        disconnect_handlers = null;
+        cache = null;
         container.destroy();
     }
 
@@ -330,6 +335,7 @@ let TaskBar = function(){
                 let handlers = [];
                 connect(workspace, "window-added", on_window_added, handlers);
                 connect(workspace, "window-removed", on_window_removed, handlers);
+                cache.workspace.set(workspace, handlers);
             }
         }
     }
