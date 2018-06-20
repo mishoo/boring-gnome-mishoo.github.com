@@ -417,6 +417,12 @@ let TaskBar = function(){
             connect(window, "notify::title", entry.update_title, window_handlers);
             connect(window, "notify::wm-class", entry.update_icon, window_handlers);
             connect(window, "notify::gtk-application-id", entry.update_icon, window_handlers);
+            entry.label.connect("destroy", function(){
+                global.log("******** LABEL DESTROYED");
+                window_handlers.forEach(f => f());
+                window_handlers = [];
+                entry.actor.destroy();
+            });
         }
         return entry;
     }
@@ -439,6 +445,7 @@ let TaskBar = function(){
         let entry = {
             actor         : btn,
             btn           : btn,
+            label         : label,
             window        : window,
             title         : title,
             box           : box,
