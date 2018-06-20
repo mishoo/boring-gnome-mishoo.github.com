@@ -408,13 +408,15 @@ let TaskBar = function(){
                     Main.wm._windowMenuManager.showWindowMenuForWindow(window, menuType, rect);
                 }
             });
-            window.connect("unmanaged", function(){
+            let window_handlers = [];
+            connect(window, "unmanaged", function(){
+                window_handlers.forEach(f => f());
                 bag.delete(window);
                 entry.actor.destroy();
-            });
-            window.connect("notify::title", entry.update_title);
-            window.connect("notify::wm-class", entry.update_icon);
-            window.connect("notify::gtk-application-id", entry.update_icon);
+            }, window_handlers);
+            connect(window, "notify::title", entry.update_title, window_handlers);
+            connect(window, "notify::wm-class", entry.update_icon, window_handlers);
+            connect(window, "notify::gtk-application-id", entry.update_icon, window_handlers);
         }
         return entry;
     }
