@@ -196,9 +196,17 @@ function find_window_by_name() {
     });
 
     entry.clutter_text.connect("text-changed", () => {
-        let text = entry.get_text().toLowerCase();
+        let queries = entry.get_text().toLowerCase().trim().split(/\s+/);
         entries.forEach(entry => {
-            entry.visible = [ entry.title, entry.class ].join(" ").toLowerCase().indexOf(text) >= 0;
+            let title = (entry.title + " " + entry.class).toLowerCase();
+            let visible = true;
+            for (var i = 0; i < queries.length; ++i) {
+                if (title.indexOf(queries[i]) < 0) {
+                    visible = false;
+                    break;
+                }
+            }
+            entry.visible = visible;
         });
         refresh(true);
     });
@@ -421,7 +429,7 @@ let TaskBar = function(){
                                   x_fill: true, y_fill: true,
                                   button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
 
-        let box = new St.BoxLayout({ style_class: "window-row", reactive: true, can_focus: true });
+        let box = new St.BoxLayout({ style_class: "window-row" });
         box.add(icon, BOX_VCENTER);
         box.add(label, BOX_VCENTER);
         btn.set_child(box);

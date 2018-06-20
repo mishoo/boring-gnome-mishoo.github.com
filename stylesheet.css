@@ -9,7 +9,7 @@
   .find-window-by-name .window-list .window-icon {
     margin-right: 0.5em; }
   .find-window-by-name .window-list .window-title {
-    max-width: 40em;
+    max-width: 50em;
     text-overflow: ellipsis; }
   .find-window-by-name .window-list .window-button {
     padding: 0.25em 1em;
