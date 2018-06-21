@@ -341,6 +341,12 @@ let TaskBar = function(){
     function destroy() {
         disconnect_handlers.forEach(f => f());
         disconnect_handlers = null;
+        for (let [workspace, handlers] of cache.workspace) {
+            handlers.forEach(f => f());
+        }
+        for (let [window, { window_handlers }] of cache.button) {
+            window_handlers.forEach(f => f());
+        }
         cache = null;
         container.destroy();
     }
@@ -408,7 +414,7 @@ let TaskBar = function(){
                     Main.wm._windowMenuManager.showWindowMenuForWindow(window, menuType, rect);
                 }
             });
-            let window_handlers = [];
+            let window_handlers = entry.window_handlers = [];
             connect(window, "unmanaged", function(){
                 window_handlers.forEach(f => f());
                 bag.delete(window);
@@ -418,9 +424,10 @@ let TaskBar = function(){
             connect(window, "notify::wm-class", entry.update_icon, window_handlers);
             connect(window, "notify::gtk-application-id", entry.update_icon, window_handlers);
             entry.label.connect("destroy", function(){
-                global.log("******** LABEL DESTROYED");
+                // global.log(`******** LABEL DESTROYED (${entry.title})`);
+                // global.log(new Error().stack);
                 window_handlers.forEach(f => f());
-                window_handlers = [];
+                window_handlers = entry.window_handlers = [];
                 entry.actor.destroy();
             });
         }
