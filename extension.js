@@ -432,7 +432,7 @@ let TaskBar = function(){
         let label = new St.Label({ text: title, style_class: "window-title" });
         let icon = new St.Bin({ style_class: "window-icon" });
 
-        let btn = new St.Button({ style_class: "window-button",
+        let btn = new St.Button({ style_class: "window-button panel-button",
                                   //can_focus: true,
                                   x_fill: true, y_fill: true,
                                   button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
