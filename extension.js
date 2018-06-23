@@ -4,7 +4,6 @@ const Atk = imports.gi.Atk;
 const Clutter = imports.gi.Clutter;
 const Main = imports.ui.main;
 const Tweener = imports.ui.tweener;
-const WM = imports.ui.main.wm;
 const Gio = imports.gi.Gio;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const WorkspaceSwitcherPopup = imports.ui.workspaceSwitcherPopup.WorkspaceSwitcherPopup;
@@ -52,40 +51,22 @@ const settings = new Gio.Settings({
     settings_schema: SettingsSchema
 });
 
-function addKeybinding(name, handler) {
-    Main.wm.addKeybinding(name, settings, 0,
-                          Shell.ActionMode.NORMAL |
-                          Shell.ActionMode.OVERVIEW,
-                          handler);
+function Connector() {
+    let disconnect = [];
+    return {
+        on: function(object, event, handler) {
+            let id = object.connect(event, handler);
+            disconnect.push(object.disconnect.bind(object, id));
+        },
+        off: function() {
+            while (disconnect.length > 0) disconnect.pop()();
+        }
+    };
 }
 
 let HANDLERS = {};
 let PREVIOUS;
 let WORKSPACE_DISPLAY_FUNC = null;
-
-function init() {
-}
-
-function enable() {
-    HANDLERS.switch = global.window_manager.connect('switch-workspace', on_switch_workspace.bind(WM));
-    WORKSPACE_DISPLAY_FUNC = WorkspaceSwitcherPopup.prototype.display;
-    WorkspaceSwitcherPopup.prototype.display = function(){}; // kill the popup
-    addKeybinding("cycle-workspaces", cycle_workspaces);
-    addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
-    addKeybinding("find-window-by-name", find_window_by_name);
-    TaskBar.init();
-    Main.panel.statusArea.activities.container.hide();
-}
-
-function disable() {
-    global.window_manager.disconnect(HANDLERS.switch);
-    WorkspaceSwitcherPopup.prototype.display = WORKSPACE_DISPLAY_FUNC;
-    Main.wm.removeKeybinding("cycle-workspaces");
-    Main.wm.removeKeybinding("cycle-workspaces-take-window");
-    Main.wm.removeKeybinding("find-window-by-name");
-    TaskBar.destroy();
-    Main.panel.statusArea.activities.container.show();
-}
 
 /* -----[ the meat follows ]----- */
 
@@ -117,22 +98,22 @@ function find_window_by_name() {
     });
     layout.set_vertical(true);
 
-    let windows_box = new St.BoxLayout({ style_class: "window-list" });
+    let winlist = new St.BoxLayout({ style_class: "window-list" });
     let selected = 0;
-    windows_box.set_vertical(true);
+    winlist.set_vertical(true);
 
     // I found this somewhere.  Not in a documentation, though.  It
     // returns the list of windows (as MetaWindow objects from Mutter,
     // rather than Clutter actors) in an order suitable for doing
     // alt-tab switching.  Perfect for what we need.
-    let window_actors = global.display.get_tab_list(Meta.TabList.NORMAL, null);
+    let windows = global.display.get_tab_list(Meta.TabList.NORMAL, null);
 
     // except that, if we want to switch to a different window, it
     // seems the current window is the last one that we'd potentially
     // want to see.
-    window_actors.push(window_actors.shift());
+    windows.push(windows.shift());
 
-    let entries = window_actors.map((window, idx) => {
+    let entries = windows.map((window, idx) => {
         let entry = TaskBar.make_win_button(window);
         // entry.btn.connect("button-press-event", function(){
         //     close();
@@ -147,7 +128,7 @@ function find_window_by_name() {
 
     let entry = new St.Entry({ style_class: "search-entry", can_focus: true });
     layout.add_child(entry);
-    layout.add_child(windows_box);
+    layout.add_child(winlist);
 
     Main.uiGroup.add_child(layout);
     entry.grab_key_focus();
@@ -216,11 +197,11 @@ function find_window_by_name() {
     function refresh(hard = true) {
         if (hard) {
             let has_selected = false;
-            windows_box.remove_all_children();
+            winlist.remove_all_children();
             entries.forEach((entry, index) => {
                 entry.index = index;
                 if (entry.visible) {
-                    windows_box.add_child(entry.actor);
+                    winlist.add_child(entry.actor);
                     if (cond_class(entry.actor, index === selected, "selected")) {
                         has_selected = true;
                     }
@@ -302,8 +283,8 @@ function center(actor) {
 }
 
 function on_switch_workspace(shellwm, from, to, direction) {
-    this._switchWorkspaceDone(shellwm); // kill animation, dammit
-    PREVIOUS = from;                    // last used workspace
+    Main.wm._switchWorkspaceDone(shellwm); // kill animation, dammit
+    PREVIOUS = from;                       // last used workspace
 }
 
 /* -----[ task bar ]----- */
@@ -312,18 +293,11 @@ let TaskBar = function(){
 
     const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
     let container;
-    let disconnect_handlers;
+    let handlers;
     let cache;
 
-    function connect(obj, event, handler, disconnect = disconnect_handlers) {
-        let id = obj.connect(event, handler);
-        disconnect.push(function(){
-            obj.disconnect(id);
-        });
-    }
-
     function init() {
-        disconnect_handlers = [];
+        handlers = Connector();
         cache = {
             button: new Map(),
             workspace: new Map()
@@ -331,21 +305,20 @@ let TaskBar = function(){
 
         container = new St.BoxLayout({ style_class: "taskbar" });
         Main.panel._leftBox.insert_child_at_index(container, 1);
-        connect(global.window_manager, "switch-workspace", on_switch_workspace);
-        connect(global.screen, "notify::n-workspaces", on_workspaces_changed);
-        connect(global.display, "notify::focus-window", on_focus_window);
+        handlers.on(global.window_manager, "switch-workspace", on_switch_workspace);
+        handlers.on(global.screen, "notify::n-workspaces", on_workspaces_changed);
+        handlers.on(global.display, "notify::focus-window", on_focus_window);
         refresh();
         on_workspaces_changed();
     }
 
     function destroy() {
-        disconnect_handlers.forEach(f => f());
-        disconnect_handlers = null;
+        handlers.off();
         for (let [workspace, handlers] of cache.workspace) {
-            handlers.forEach(f => f());
+            handlers.off();
         }
-        for (let [window, { window_handlers }] of cache.button) {
-            window_handlers.forEach(f => f());
+        for (let [window, { handlers }] of cache.button) {
+            handlers.off();
         }
         cache = null;
         container.destroy();
@@ -361,9 +334,9 @@ let TaskBar = function(){
         for (let i = 0; i < n; ++i) {
             let workspace = global.screen.get_workspace_by_index(i);
             if (!cache.workspace.has(workspace)) {
-                let handlers = [];
-                connect(workspace, "window-added", on_window_added, handlers);
-                connect(workspace, "window-removed", on_window_removed, handlers);
+                let handlers = Connector();
+                handlers.on(workspace, "window-added", on_window_added, handlers);
+                handlers.on(workspace, "window-removed", on_window_removed, handlers);
                 cache.workspace.set(workspace, handlers);
             }
         }
@@ -414,20 +387,19 @@ let TaskBar = function(){
                     Main.wm._windowMenuManager.showWindowMenuForWindow(window, menuType, rect);
                 }
             });
-            let window_handlers = entry.window_handlers = [];
-            connect(window, "unmanaged", function(){
-                window_handlers.forEach(f => f());
+            let handlers = entry.handlers = Connector();
+            handlers.on(window, "unmanaged", function(){
+                handlers.off();
                 bag.delete(window);
                 entry.actor.destroy();
-            }, window_handlers);
-            connect(window, "notify::title", entry.update_title, window_handlers);
-            connect(window, "notify::wm-class", entry.update_icon, window_handlers);
-            connect(window, "notify::gtk-application-id", entry.update_icon, window_handlers);
+            });
+            handlers.on(window, "notify::title", entry.update_title);
+            handlers.on(window, "notify::wm-class", entry.update_icon);
+            handlers.on(window, "notify::gtk-application-id", entry.update_icon);
             entry.label.connect("destroy", function(){
                 // global.log(`******** LABEL DESTROYED (${entry.title})`);
                 // global.log(new Error().stack);
-                window_handlers.forEach(f => f());
-                window_handlers = entry.window_handlers = [];
+                handlers.off();
                 entry.actor.destroy();
             });
         }
@@ -497,3 +469,36 @@ let TaskBar = function(){
     };
 
 }();
+
+/* -----[ entry points ]----- */
+
+function init() {
+}
+
+function enable() {
+    HANDLERS.switch = global.window_manager.connect('switch-workspace', on_switch_workspace);
+    WORKSPACE_DISPLAY_FUNC = WorkspaceSwitcherPopup.prototype.display;
+    WorkspaceSwitcherPopup.prototype.display = function(){}; // kill the popup
+    addKeybinding("cycle-workspaces", cycle_workspaces);
+    addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
+    addKeybinding("find-window-by-name", find_window_by_name);
+    TaskBar.init();
+    Main.panel.statusArea.activities.container.hide();
+
+    function addKeybinding(name, handler) {
+        Main.wm.addKeybinding(name, settings, 0,
+                              Shell.ActionMode.NORMAL |
+                              Shell.ActionMode.OVERVIEW,
+                              handler);
+    }
+}
+
+function disable() {
+    global.window_manager.disconnect(HANDLERS.switch);
+    WorkspaceSwitcherPopup.prototype.display = WORKSPACE_DISPLAY_FUNC;
+    Main.wm.removeKeybinding("cycle-workspaces");
+    Main.wm.removeKeybinding("cycle-workspaces-take-window");
+    Main.wm.removeKeybinding("find-window-by-name");
+    TaskBar.destroy();
+    Main.panel.statusArea.activities.container.show();
+}
