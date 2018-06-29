@@ -31,7 +31,7 @@
     </key>
     <key type="as" name="reset-window-zoom-and-scale">
       <default><![CDATA[['<Super>Home']]]></default>
-      <summary>Zoom out window</summary>
+      <summary>Reset window zoom/rotation</summary>
     </key>
   </schema>
 </schemalist>

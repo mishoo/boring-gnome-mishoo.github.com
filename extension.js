@@ -397,15 +397,16 @@ let TaskBar = function(){
             cond_class(entry.actor, is_active_window(window), "active");
 
             // setup new window button
-            entry.btn.connect("clicked", function(_, button){
-                if (button == 1) {
+            entry.btn.connect("button-press-event", function(_, event) {
+                if (event.get_button() == 1) {
                     toggle_window(window);
                 } else {
                     let menuType = Meta.WindowMenuType.WM;
                     let [ x, y ] = entry.btn.get_transformed_position();
-                    let [ width, height ] = entry.btn.get_size();
+                    let [ width, height ] = entry.btn.get_transformed_size();
                     let rect = { x, y, width, height };
                     Main.wm._windowMenuManager.showWindowMenuForWindow(window, menuType, rect);
+                    return Clutter.EVENT_STOP;
                 }
             });
             let handlers = entry.handlers = Connector();
@@ -418,8 +419,6 @@ let TaskBar = function(){
             handlers.on(window, "notify::wm-class", entry.update_icon);
             handlers.on(window, "notify::gtk-application-id", entry.update_icon);
             entry.label.connect("destroy", function(){
-                // global.log(`******** LABEL DESTROYED (${entry.title})`);
-                // global.log(new Error().stack);
                 handlers.off();
                 entry.actor.destroy();
             });
