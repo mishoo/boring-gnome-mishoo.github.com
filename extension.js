@@ -472,18 +472,7 @@ let TaskBar = function(){
 
 function focus_window_actor() {
     let fw = global.display.focus_window;
-    // there probably is some simpler way to do this, but I couldn't
-    // find it.  display.focus_window is a Mutter MetaWindow object,
-    // but we really need its associated ClutterActor.
-    if (fw) {
-        let windows = global.get_window_actors();
-        for (var i = windows.length; --i >= 0;) {
-            let win = windows[i];
-            if (win.get_meta_window() === fw) {
-                return win;
-            }
-        }
-    }
+    return fw && fw.get_compositor_private();
 }
 
 function rotate_window(angle) {
