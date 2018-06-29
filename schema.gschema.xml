@@ -13,5 +13,25 @@
       <summary>Display a list of all windows (all workspaces) allowing you
       to quickly seacrh through it.</summary>
     </key>
+    <key type="as" name="rotate-window-right">
+      <default><![CDATA[['<Ctrl><Super>Page_Down']]]></default>
+      <summary>Rotate window right</summary>
+    </key>
+    <key type="as" name="rotate-window-left">
+      <default><![CDATA[['<Ctrl><Super>Page_Up']]]></default>
+      <summary>Rotate window left</summary>
+    </key>
+    <key type="as" name="zoom-in-window">
+      <default><![CDATA[['<Super>Page_Up']]]></default>
+      <summary>Zoom in window</summary>
+    </key>
+    <key type="as" name="zoom-out-window">
+      <default><![CDATA[['<Super>Page_Down']]]></default>
+      <summary>Zoom out window</summary>
+    </key>
+    <key type="as" name="reset-window-zoom-and-scale">
+      <default><![CDATA[['<Super>Home']]]></default>
+      <summary>Zoom out window</summary>
+    </key>
   </schema>
 </schemalist>

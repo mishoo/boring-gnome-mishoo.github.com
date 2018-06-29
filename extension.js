@@ -470,6 +470,61 @@ let TaskBar = function(){
 
 }();
 
+function focus_window_actor() {
+    let fw = global.display.focus_window;
+    // there probably is some simpler way to do this, but I couldn't
+    // find it.  display.focus_window is a Mutter MetaWindow object,
+    // but we really need its associated ClutterActor.
+    if (fw) {
+        let windows = global.get_window_actors();
+        for (var i = windows.length; --i >= 0;) {
+            let win = windows[i];
+            if (win.get_meta_window() === fw) {
+                return win;
+            }
+        }
+    }
+}
+
+function rotate_window(angle) {
+    let fw = focus_window_actor();
+    if (fw) {
+        fw.set_pivot_point(0.5, 0.5);
+        Tweener.addTween(fw, {
+            time: 0.5,
+            transition: "easeOutQuad",
+            rotation_angle_z: angle ? fw.rotation_angle_z + angle : 0
+        });
+    }
+}
+
+function scale_window(factor) {
+    let fw = focus_window_actor();
+    if (fw) {
+        fw.set_pivot_point(0.5, 0.5);
+        Tweener.addTween(fw, {
+            time: 0.5,
+            transition: "easeOutQuad",
+            scale_x: factor ? fw.scale_x * factor : 1,
+            scale_y: factor ? fw.scale_y * factor : 1
+        });
+    }
+}
+
+function reset_zoom_scale_window() {
+    let fw = focus_window_actor();
+    if (fw) {
+        fw.set_pivot_point(0.5, 0.5);
+        Tweener.addTween(fw, {
+            time: 0.5,
+            transition: "easeOutQuad",
+            rotation_angle_z: 0,
+            scale_x: 1,
+            scale_y: 1
+        });
+    }
+}
+
 /* -----[ entry points ]----- */
 
 function init() {
@@ -482,6 +537,11 @@ function enable() {
     addKeybinding("cycle-workspaces", cycle_workspaces);
     addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
     addKeybinding("find-window-by-name", find_window_by_name);
+    addKeybinding("rotate-window-right", rotate_window.bind(null, 10));
+    addKeybinding("rotate-window-left", rotate_window.bind(null, -10));
+    addKeybinding("zoom-in-window", scale_window.bind(null, 1.1));
+    addKeybinding("zoom-out-window", scale_window.bind(null, 1/1.1));
+    addKeybinding("reset-window-zoom-and-scale", reset_zoom_scale_window);
     TaskBar.init();
     Main.panel.statusArea.activities.container.hide();
 
@@ -499,6 +559,11 @@ function disable() {
     Main.wm.removeKeybinding("cycle-workspaces");
     Main.wm.removeKeybinding("cycle-workspaces-take-window");
     Main.wm.removeKeybinding("find-window-by-name");
+    Main.wm.removeKeybinding("rotate-window-right");
+    Main.wm.removeKeybinding("rotate-window-left");
+    Main.wm.removeKeybinding("zoom-in-window");
+    Main.wm.removeKeybinding("zoom-out-window");
+    Main.wm.removeKeybinding("reset-window-zoom-and-scale");
     TaskBar.destroy();
     Main.panel.statusArea.activities.container.show();
 }
