@@ -131,10 +131,22 @@ function find_window_by_name() {
     layout.add_child(winlist);
 
     Main.uiGroup.add_child(layout);
-    entry.grab_key_focus();
-
     center(layout);
     layout.set_width(layout.width); // to keep it fixed
+    entry.grab_key_focus();
+
+    layout.set_pivot_point(0.5, 0.5);
+    layout.opacity = 0;
+    layout.scale_x = 0.8;
+    layout.scale_y = 0.6;
+
+    Tweener.addTween(layout, {
+        time: 0.1,
+        transition: "easeOutQuad",
+        opacity: 255,
+        scale_x: 1,
+        scale_y: 1
+    });
 
     // XXX: why in the world do I need to connect these handlers to
     // `entry.clutter_text` rather than `entry` beats me.
@@ -270,7 +282,16 @@ function find_window_by_name() {
     }
 
     function close() {
-        layout.destroy();
+        Tweener.addTween(layout, {
+            time: 0.05,
+            transition: "easeOutQuad",
+            opacity: 0,
+            scale_x: 0.8,
+            scale_y: 0.3,
+            onComplete: () => {
+                layout.destroy();
+            }
+        });
     }
 }
 
