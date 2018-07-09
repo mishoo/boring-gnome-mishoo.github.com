@@ -1,36 +1,47 @@
 .find-window-by-name {
   padding: 2em;
   background-color: rgba(10, 10, 10, 0.9);
-  border-radius: 5px;
-  border: 1px solid #7cf;
-  box-shadow: 2px 4px 15px 5px #000; }
-  .find-window-by-name .search-entry {
-    margin-bottom: 2em; }
-  .find-window-by-name .window-list .window-icon {
-    margin-right: 0.5em; }
-  .find-window-by-name .window-list .window-title {
-    max-width: 50em;
-    text-overflow: ellipsis; }
-  .find-window-by-name .window-list .window-button {
-    padding: 0.25em 1em;
-    border-radius: 5px; }
-    .find-window-by-name .window-list .window-button.selected {
-      background-color: rgba(80, 120, 190, 0.5); }
+  border-radius: 15px;
+  border: 2px solid #65f;
+  box-shadow: 2px 4px 15px 3px #000; }
+
+.find-window-by-name .search-entry {
+  margin-bottom: 2em; }
+
+.find-window-by-name .window-list .window-icon {
+  margin-right: 0.5em; }
+
+.find-window-by-name .window-list .window-title {
+  max-width: 50em;
+  text-overflow: ellipsis; }
+
+.find-window-by-name .window-list .window-button {
+  padding: 0.25em 1em;
+  border-radius: 5px; }
+
+.find-window-by-name .window-list .window-button.selected {
+  background-color: rgba(80, 120, 190, 0.5); }
 
 .taskbar .window-button {
   padding: 2px 5px; }
-  .taskbar .window-button .window-icon {
-    margin-right: 5px;
-    opacity: 0.75; }
-  .taskbar .window-button .window-title {
-    max-width: 9em;
-    text-overflow: ellipsis;
-    color: #aaa; }
-  .taskbar .window-button:hover {
-    background: #222; }
-  .taskbar .window-button.minimized .window-title {
-    color: #777; }
-  .taskbar .window-button.active .window-title {
-    color: #fff; }
-  .taskbar .window-button.active .window-icon {
-    opacity: 1; }
+
+.taskbar .window-button .window-icon {
+  margin-right: 5px;
+  opacity: 0.75; }
+
+.taskbar .window-button .window-title {
+  max-width: 9em;
+  text-overflow: ellipsis;
+  color: #aaa; }
+
+.taskbar .window-button:hover {
+  background: #222; }
+
+.taskbar .window-button.minimized .window-title {
+  color: #777; }
+
+.taskbar .window-button.active .window-title {
+  color: #fff; }
+
+.taskbar .window-button.active .window-icon {
+  opacity: 1; }

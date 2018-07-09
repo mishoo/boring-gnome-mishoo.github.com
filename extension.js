@@ -11,6 +11,7 @@ const Shell = imports.gi.Shell;
 const GLib = imports.gi.GLib;
 
 const ICON_SIZE = 24;
+const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
 
 function setTimeout(func, millis) {
     return GLib.timeout_add(GLib.PRIORITY_DEFAULT, millis, function() {
@@ -56,7 +57,11 @@ function Connector() {
     return {
         on: function(object, event, handler) {
             let id = object.connect(event, handler);
-            disconnect.push(object.disconnect.bind(object, id));
+            let func = object.disconnect.bind(object, id);
+            disconnect.push(func);
+            // object.connect("destroy", () => {
+            //     disconnect = disconnect.filter(f => f !== func);
+            // });
         },
         off: function() {
             while (disconnect.length > 0) disconnect.pop()();
@@ -64,7 +69,6 @@ function Connector() {
     };
 }
 
-let HANDLERS = {};
 let PREVIOUS;
 let WORKSPACE_DISPLAY_FUNC = null;
 
@@ -72,6 +76,10 @@ let WORKSPACE_DISPLAY_FUNC = null;
 
 function CTRL(ev) {
     return ev.get_state() & Clutter.ModifierType.CONTROL_MASK;
+}
+
+function SUPER(ev) {
+    return ev.get_state() & Clutter.ModifierType.SUPER_MASK;
 }
 
 function cycle_workspaces(display, screen){
@@ -91,6 +99,61 @@ function cycle_workspaces_take_window(display, screen) {
     }
 }
 
+function make_win_button(window) {
+    let title = window.get_title();
+    let label = new St.Label({ text: title, style_class: "window-title" });
+    let icon = new St.Bin({ style_class: "window-icon" });
+
+    let btn = new St.Button({ style_class: "window-button panel-button",
+                              can_focus: true,
+                              x_fill: true, y_fill: true,
+                              button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
+
+    let box = new St.BoxLayout({ style_class: "window-row" });
+    box.add(icon, BOX_VCENTER);
+    box.add(label, BOX_VCENTER);
+    btn.set_child(box);
+
+    let handlers = Connector();
+    handlers.on(window, "notify::title", update_title);
+    handlers.on(window, "notify::wm-class", update_icon);
+    handlers.on(window, "notify::gtk-application-id", update_icon);
+    handlers.on(window, "unmanaged", function(){
+        btn.destroy();
+    });
+    btn.connect("destroy", function(){
+        handlers.off();
+    });
+
+    let entry = {
+        handlers      : handlers,
+        actor         : btn,
+        btn           : btn,
+        label         : label,
+        window        : window,
+        title         : title,
+        box           : box,
+        update_title  : update_title,
+        update_icon   : update_icon
+    };
+
+    update_icon();
+    return entry;
+
+    function update_title() {
+        label.set_text(entry.title = window.get_title());
+    }
+
+    function update_icon() {
+        let app = Shell.WindowTracker.get_default().get_window_app(window);
+        if (app) {
+            icon.set_child(app.create_icon_texture(ICON_SIZE));
+        } else {
+            icon.set_child(new St.Icon({ icon_name: "icon-missing", icon_size: ICON_SIZE }));
+        }
+    }
+}
+
 function find_window_by_name() {
     let layout = new St.BoxLayout({
         style_class: "find-window-by-name",
@@ -100,30 +163,10 @@ function find_window_by_name() {
 
     let winlist = new St.BoxLayout({ style_class: "window-list" });
     let selected = 0;
+    let entries;
     winlist.set_vertical(true);
 
-    // I found this somewhere.  Not in a documentation, though.  It
-    // returns the list of windows (as MetaWindow objects from Mutter,
-    // rather than Clutter actors) in an order suitable for doing
-    // alt-tab switching.  Perfect for what we need.
-    let windows = global.display.get_tab_list(Meta.TabList.NORMAL, null);
-
-    // except that, if we want to switch to a different window, it
-    // seems the current window is the last one that we'd potentially
-    // want to see.
-    windows.push(windows.shift());
-
-    let entries = windows.map((window, idx) => {
-        let entry = TaskBar.make_win_button(window);
-        // entry.btn.connect("button-press-event", function(){
-        //     close();
-        // });
-        return Object.assign(entry, {
-            class   : window.get_wm_class(),
-            index   : idx,
-            visible : true
-        });
-    });
+    rebuild();
     refresh(true);
 
     let entry = new St.Entry({ style_class: "search-entry", can_focus: true });
@@ -131,6 +174,9 @@ function find_window_by_name() {
     layout.add_child(winlist);
 
     Main.uiGroup.add_child(layout);
+    Main.pushModal(layout, {
+        actionMode: Shell.ActionMode.ALL
+    });
     center(layout);
     layout.set_width(layout.width); // to keep it fixed
     entry.grab_key_focus();
@@ -159,7 +205,7 @@ function find_window_by_name() {
         }
         if (symbol == Clutter.KEY_Return) {
             if (selected != null) {
-                Main.activateWindow(entries[selected].window);
+                gotoWindow(entries[selected].window);
             }
             // no need to close, it'll be dismissed by the focus-out
             // handler. //  close();
@@ -206,6 +252,40 @@ function find_window_by_name() {
 
     entry.clutter_text.connect("key-focus-out", close);
 
+    function gotoWindow(window) {
+        Main.activateWindow(window);
+        close();
+    }
+
+    function rebuild() {
+        // I found this somewhere.  Not in a documentation, though.  It
+        // returns the list of windows (as MetaWindow objects from Mutter,
+        // rather than Clutter actors) in an order suitable for doing
+        // alt-tab switching.  Perfect for what we need.
+        let windows = global.display.get_tab_list(Meta.TabList.NORMAL, null);
+
+        // except that, if we want to switch to a different window, it
+        // seems the current window is the last one that we'd potentially
+        // want to see.
+        windows.push(windows.shift());
+
+        entries = windows.map((window, idx) => {
+            let entry = make_win_button(window);
+            entry.btn.connect("clicked", gotoWindow.bind(null, window));
+            entry.actor.connect("destroy", function(){
+                entries = entries.filter((el, idx) => {
+                    el.index = idx;
+                    return el.window !== window;
+                });
+            });
+            return Object.assign(entry, {
+                class   : window.get_wm_class(),
+                index   : idx,
+                visible : true
+            });
+        });
+    }
+
     function refresh(hard = true) {
         if (hard) {
             let has_selected = false;
@@ -219,6 +299,7 @@ function find_window_by_name() {
                     }
                 }
             });
+
             if (!has_selected) {
                 let first = get_first_visible();
                 if (first != null) {
@@ -312,7 +393,6 @@ function on_switch_workspace(shellwm, from, to, direction) {
 
 let TaskBar = function(){
 
-    const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
     let container;
     let handlers;
     let cache;
@@ -409,64 +489,11 @@ let TaskBar = function(){
                     return Clutter.EVENT_STOP;
                 }
             });
-            let handlers = entry.handlers = Connector();
-            handlers.on(window, "unmanaged", function(){
-                handlers.off();
+            entry.actor.connect("destroy", function(){
                 bag.delete(window);
-                entry.actor.destroy();
-            });
-            handlers.on(window, "notify::title", entry.update_title);
-            handlers.on(window, "notify::wm-class", entry.update_icon);
-            handlers.on(window, "notify::gtk-application-id", entry.update_icon);
-            entry.label.connect("destroy", function(){
-                handlers.off();
-                entry.actor.destroy();
             });
         }
         return entry;
-    }
-
-    function make_win_button(window) {
-        let title = window.get_title();
-        let label = new St.Label({ text: title, style_class: "window-title" });
-        let icon = new St.Bin({ style_class: "window-icon" });
-
-        let btn = new St.Button({ style_class: "window-button panel-button",
-                                  //can_focus: true,
-                                  x_fill: true, y_fill: true,
-                                  button_mask: St.ButtonMask.ONE | St.ButtonMask.THREE });
-
-        let box = new St.BoxLayout({ style_class: "window-row" });
-        box.add(icon, BOX_VCENTER);
-        box.add(label, BOX_VCENTER);
-        btn.set_child(box);
-
-        let entry = {
-            actor         : btn,
-            btn           : btn,
-            label         : label,
-            window        : window,
-            title         : title,
-            box           : box,
-            update_title  : update_title,
-            update_icon   : update_icon
-        };
-
-        update_icon();
-        return entry;
-
-        function update_title() {
-            label.set_text(entry.title = window.get_title());
-        }
-
-        function update_icon() {
-            let app = Shell.WindowTracker.get_default().get_window_app(window);
-            if (app) {
-                icon.set_child(app.create_icon_texture(ICON_SIZE));
-            } else {
-                icon.set_child(new St.Icon({ icon_name: "icon-missing", icon_size: ICON_SIZE }));
-            }
-        }
     }
 
     function is_active_window(window) {
@@ -484,8 +511,7 @@ let TaskBar = function(){
 
     return {
         init            : init,
-        destroy         : destroy,
-        make_win_button : make_win_button
+        destroy         : destroy
     };
 
 }();
@@ -534,15 +560,63 @@ function reset_zoom_scale_window() {
     }
 }
 
+/* -----[ set window opacity with Super + mouse wheel ]----- */
+
+// leaving the code there for posterity, but it's not working.
+// apparently it's impossible to grab mouse events on arbitrary
+// windows.
+let Opacity = function(){
+    let handlers = Connector();
+
+    function init() {
+        let windows = global.display.get_tab_list(Meta.TabList.NORMAL, null);
+        windows.forEach(window => {
+            let actor = window.get_compositor_private();
+            // actor = actor.get_texture(); // ?
+            if (actor) {
+                global.log("*** Adding on", actor);
+                handlers.on(actor, "scroll-event", opacity_handler);
+            }
+        });
+    }
+
+    function destroy() {
+        handlers.off();
+    }
+
+    function opacity_handler(actor, ev) {
+        global.log("*************** opacity_handler");
+        if (SUPER(ev)) {
+            let direction = ev.get_scroll_direction();
+            if (direction == Clutter.ScrollDirection.DOWN) {
+                actor.opacity = Math.max(255, actor.opacity + 20);
+            } else if (direction == Clutter.ScrollDirection.UP) {
+                actor.opacity = Math.min(0, actor.opacity - 20);
+            }
+            return Clutter.EVENT_STOP;
+        }
+    }
+
+    return {
+        init: init,
+        destroy: destroy
+    };
+}();
+
 /* -----[ entry points ]----- */
 
 function init() {
 }
 
+let HANDLERS = Connector();
+
 function enable() {
-    HANDLERS.switch = global.window_manager.connect('switch-workspace', on_switch_workspace);
+    HANDLERS.on(global.window_manager, "switch-workspace", on_switch_workspace);
+
+    // that's monkey patching
     WORKSPACE_DISPLAY_FUNC = WorkspaceSwitcherPopup.prototype.display;
     WorkspaceSwitcherPopup.prototype.display = function(){}; // kill the popup
+
     addKeybinding("cycle-workspaces", cycle_workspaces);
     addKeybinding("cycle-workspaces-take-window", cycle_workspaces_take_window);
     addKeybinding("find-window-by-name", find_window_by_name);
@@ -551,20 +625,28 @@ function enable() {
     addKeybinding("zoom-in-window", scale_window.bind(null, 1.1));
     addKeybinding("zoom-out-window", scale_window.bind(null, 1/1.1));
     addKeybinding("reset-window-zoom-and-scale", reset_zoom_scale_window);
+
     TaskBar.init();
+
+    // hide "activities" button
     Main.panel.statusArea.activities.container.hide();
+
+    // this doesn't work
+    // Opacity.init();
 
     function addKeybinding(name, handler) {
         Main.wm.addKeybinding(name, settings, 0,
-                              Shell.ActionMode.NORMAL |
-                              Shell.ActionMode.OVERVIEW,
+                              Shell.ActionMode.ALL,
                               handler);
     }
 }
 
 function disable() {
-    global.window_manager.disconnect(HANDLERS.switch);
+    HANDLERS.off();
+
+    // restore the stupid popup
     WorkspaceSwitcherPopup.prototype.display = WORKSPACE_DISPLAY_FUNC;
+
     Main.wm.removeKeybinding("cycle-workspaces");
     Main.wm.removeKeybinding("cycle-workspaces-take-window");
     Main.wm.removeKeybinding("find-window-by-name");
@@ -573,6 +655,11 @@ function disable() {
     Main.wm.removeKeybinding("zoom-in-window");
     Main.wm.removeKeybinding("zoom-out-window");
     Main.wm.removeKeybinding("reset-window-zoom-and-scale");
+
     TaskBar.destroy();
+
+    // restore "activities" button
     Main.panel.statusArea.activities.container.show();
+
+    // Opacity.destroy();
 }
