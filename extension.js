@@ -13,6 +13,19 @@ const GLib = imports.gi.GLib;
 const ICON_SIZE = 24;
 const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
 
+// from https://github.com/micheleg/dash-to-dock/pull/770/files
+var DisplayWrapper = {
+    getScreen() {
+        return global.screen || global.display;
+    },
+    getWorkspaceManager() {
+        return global.screen || global.workspace_manager;
+    },
+    getMonitorManager() {
+        return global.screen || Meta.MonitorManager.get();
+    }
+};
+
 function setTimeout(func, millis) {
     return GLib.timeout_add(GLib.PRIORITY_DEFAULT, millis, function() {
         func();
@@ -82,9 +95,9 @@ function SUPER(ev) {
     return ev.get_state() & Clutter.ModifierType.SUPER_MASK;
 }
 
-function cycle_workspaces(display, screen){
+function cycle_workspaces() {
     if (PREVIOUS != null) {
-        let ws = screen.get_workspace_by_index(PREVIOUS);
+        let ws = DisplayWrapper.getWorkspaceManager().get_workspace_by_index(PREVIOUS);
         Main.wm.actionMoveWorkspace(ws);
     }
 }
@@ -407,7 +420,7 @@ let TaskBar = function(){
         container = new St.BoxLayout({ style_class: "taskbar" });
         Main.panel._leftBox.insert_child_at_index(container, 1);
         handlers.on(global.window_manager, "switch-workspace", on_switch_workspace);
-        handlers.on(global.screen, "notify::n-workspaces", on_workspaces_changed);
+        handlers.on(DisplayWrapper.getWorkspaceManager(), "notify::n-workspaces", on_workspaces_changed);
         handlers.on(global.display, "notify::focus-window", on_focus_window);
         refresh();
         on_workspaces_changed();
@@ -431,9 +444,9 @@ let TaskBar = function(){
 
     // this mostly copied from window-list (official extension).
     function on_workspaces_changed() {
-        let n = global.screen.n_workspaces;
+        let n = DisplayWrapper.getWorkspaceManager().n_workspaces;
         for (let i = 0; i < n; ++i) {
-            let workspace = global.screen.get_workspace_by_index(i);
+            let workspace = DisplayWrapper.getWorkspaceManager().get_workspace_by_index(i);
             if (!cache.workspace.has(workspace)) {
                 let handlers = Connector();
                 handlers.on(workspace, "window-added", on_window_added, handlers);
@@ -453,7 +466,7 @@ let TaskBar = function(){
 
     function refresh() {
         container.remove_all_children();
-        let workspace = global.screen.get_active_workspace();
+        let workspace = DisplayWrapper.getWorkspaceManager().get_active_workspace();
         let windows = global.display.get_tab_list(Meta.TabList.NORMAL, workspace);
         windows.forEach(window => {
             let x = cached_win_button(window);
