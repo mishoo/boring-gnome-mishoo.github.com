@@ -15,16 +15,16 @@ const BOX_VCENTER = { y_fill: false, y_align: St.Align.MIDDLE };
 
 const WSM = global.screen || global.workspace_manager;
 
-function setTimeout(func, millis) {
-    return GLib.timeout_add(GLib.PRIORITY_DEFAULT, millis, function() {
-        func();
-        return false; // no repeat
-    });
-}
+// function setTimeout(func, millis) {
+//     return GLib.timeout_add(GLib.PRIORITY_DEFAULT, millis, function() {
+//         func();
+//         return false; // no repeat
+//     });
+// }
 
-function clearTimeout(id) {
-    GLib.Source.remove(id);
-}
+// function clearTimeout(id) {
+//     GLib.Source.remove(id);
+// }
 
 function add_class(widget, cls) {
     widget.add_style_class_name(cls);
@@ -70,6 +70,43 @@ function Connector() {
         }
     };
 }
+
+// the boilerplate is copied from js/ui/status/brightness.js from gnome-shell.
+const Brightness = (() => {
+    const { loadInterfaceXML } = imports.misc.fileUtils;
+    const BUS_NAME = 'org.gnome.SettingsDaemon.Power';
+    const OBJECT_PATH = '/org/gnome/SettingsDaemon/Power';
+    const BrightnessInterface = loadInterfaceXML('org.gnome.SettingsDaemon.Power.Screen');
+    const BrightnessProxy = Gio.DBusProxy.makeProxyWrapper(BrightnessInterface);
+
+    let proxy;
+    new BrightnessProxy(
+        Gio.DBus.session, BUS_NAME, OBJECT_PATH,
+        (_proxy, error) => {
+            if (error) {
+                global.log(error.message);
+            } else {
+                proxy = _proxy;
+            }
+        }
+    );
+
+    return {
+        get() {
+            if (proxy) {
+                return parseFloat(proxy.Brightness);
+            }
+        },
+        set(val) {
+            if (proxy) {
+                proxy.Brightness = Math.max(4, Math.min(val, 100));
+            }
+        },
+        add(delta) {
+            this.set(this.get() + delta);
+        }
+    };
+})();
 
 let PREVIOUS;
 let WORKSPACE_DISPLAY_FUNC = null;
@@ -605,6 +642,15 @@ let Opacity = function(){
     };
 }();
 
+function power_scroll_handler(actor, ev) {
+    let direction = ev.get_scroll_direction();
+    if (direction == Clutter.ScrollDirection.DOWN) {
+        Brightness.add(-2);
+    } else if (direction == Clutter.ScrollDirection.UP) {
+        Brightness.add(4);
+    }
+}
+
 /* -----[ entry points ]----- */
 
 function init() {
@@ -614,6 +660,7 @@ let HANDLERS = Connector();
 
 function enable() {
     HANDLERS.on(global.window_manager, "switch-workspace", on_switch_workspace);
+    HANDLERS.on(Main.panel.statusArea.aggregateMenu._power.indicators, "scroll-event", power_scroll_handler);
 
     // that's monkey patching
     WORKSPACE_DISPLAY_FUNC = WorkspaceSwitcherPopup.prototype.display;
